@@ -19,6 +19,11 @@ SLEEP_SECONDS = 1
 OUTPUT_PDF = "free_assistance_articles.pdf"
 
 
+def detect_variant(soup: BeautifulSoup):
+    """Variant detection disabled - always returns None."""
+    return None
+
+
 def fetch_article(article_id):
     """
     Tente de récupérer le titre d'un article donné par son ID.
@@ -45,9 +50,9 @@ def fetch_article(article_id):
                     break
         if title and len(title) > 3:
             return (title, url)
-    except Exception as e:
-        # Ignore les erreurs réseau ou parsing
-        pass
+    except (requests.exceptions.RequestException, requests.exceptions.Timeout) as e:
+        # Ignore uniquement les erreurs réseau ou de timeout
+        print(f"[!!] Erreur réseau pour l'article {article_id}: {e}")
     return None
 
 
@@ -59,8 +64,9 @@ def scrape_articles(start_id=START_ID, end_id=END_ID):
     for article_id in range(start_id, end_id + 1):
         result = fetch_article(article_id)
         if result:
-            print(f"[OK] {article_id}: {result[0]}")
-            articles.append(result)
+            title, url = result
+            print(f"[OK] {article_id}: {title}")
+            articles.append((title, url))
         else:
             print(f"[--] {article_id}: Not found or no title.")
         time.sleep(SLEEP_SECONDS)
@@ -77,14 +83,16 @@ def generate_pdf(articles, output_file=OUTPUT_PDF):
     pdf.set_font("Arial", size=12)
     
     for idx, (title, url) in enumerate(articles, 1):
-        pdf.set_font("Arial", style="B", size=12)
-        safe_title = clean_text(title)
-        pdf.cell(0, 10, f"{idx}. {safe_title}", ln=1)
-        pdf.set_font("Arial", style="", size=11)
-        # Ajout du lien cliquable
+        # Écrit le titre comme texte cliquable menant à l'URL
+        pdf.set_font("Arial", size=12)
         pdf.set_text_color(0, 0, 255)
-        pdf.cell(0, 8, url, ln=1, link=url)
+        # Affiche le titre (et son index) comme lien vers l'article
+        pdf.write(8, f"{idx}. {clean_text(title)}", link=url)
+        pdf.ln(8)
         pdf.set_text_color(0, 0, 0)
+        # Ajoute l'URL en petit (optionnel)
+        pdf.set_font("Arial", size=8)
+        pdf.multi_cell(0, 5, url)
         pdf.ln(2)
     pdf.output(output_file)
     print(f"PDF généré : {output_file}")
